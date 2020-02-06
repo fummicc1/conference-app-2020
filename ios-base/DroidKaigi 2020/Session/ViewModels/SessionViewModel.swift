@@ -8,7 +8,7 @@ final class SessionViewModel {
 
     // input
     private let toggleEmbeddedViewRelay = PublishRelay<Void>()
-    private let sessionsFetchFromApiRelay: PublishRelay<[Session]>
+    private let sessionsFetchFromApiRelay: BehaviorRelay<[Session]>
     private let sessionsFetchFromLocalRelay: BehaviorRelay<[Session]>
 
     func toggleEmbeddedView() {
@@ -23,14 +23,14 @@ final class SessionViewModel {
     private let bookingSessionProvider: BookingSessionProvider
 
     init() {
-        sessionsFetchFromApiRelay = .init()
+        sessionsFetchFromApiRelay = .init(value: [])
         sessionsFetchFromLocalRelay = .init(value: [])
         bookingSessionProvider = .init()
         let isFocusedOnEmbeddedViewRelay = BehaviorRelay<Bool>(value: true)
         isFocusedOnEmbeddedView = isFocusedOnEmbeddedViewRelay.asDriver()
 
         sessions = Driver.combineLatest(
-            sessionsFetchFromApiRelay.asDriver(onErrorJustReturn: []),
+            sessionsFetchFromApiRelay.asDriver(),
             sessionsFetchFromLocalRelay.asDriver()
         ) { remote, local in
             let filteredSameSession = remote.filter { (session: Session) in
@@ -43,8 +43,8 @@ final class SessionViewModel {
         let dataProvider = SessionDataProvider()
         dataProvider
             .fetchSessions()
-            .filter { !$0.isEmpty }
             .asObservable()
+            .catchErrorJustReturn([])
             .bind(to: sessionsFetchFromApiRelay)
             .disposed(by: disposeBag)
 
@@ -56,14 +56,7 @@ final class SessionViewModel {
 
         sessionsFetchFromApiRelay
             .asObservable()
-            .flatMap { [unowned self] (sessions: [Session]) -> Observable<[Session]> in
-                if sessions.isEmpty {
-                    return self.bookingSessionProvider.fetchBookedSessions()
-                }
-                return .just(sessions)
-            }
-            .filter { !$0.isEmpty }
-            .compactMap { $0.first?.startTime }
+            .map { $0.first?.startTime }
             .flatMap(bookingSessionProvider.fetchBookedSessions)
             .bind(to: sessionsFetchFromLocalRelay)
             .disposed(by: disposeBag)

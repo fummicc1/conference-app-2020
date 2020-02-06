@@ -16,16 +16,17 @@ final class BookingSessionProvider {
             fatalError(error.localizedDescription)
         }
     }
-
-    // 1582160400 is 2/20 10:00
-    func fetchBookedSessions(firstSessionStartTime: TimeInterval = 1582160400) -> Observable<[Session]> {
+    
+    func fetchBookedSessions(firstSessionStartTime: TimeInterval?) -> Observable<[Session]> {
+        // 1582160400000ms is 2/20 10:00 UTC+9
+        let firstSessionDefaultStartTime: TimeInterval = 1582160400000
         do {
             let realm = try Realm()
             let result = realm.objects(SessionEntity.self)
 
             return Observable.collection(from: result).map { (results) -> [Session] in
                 results.compactMap { (sessionEntity) -> Session? in
-                    return RealmToModelMapper.toModel(sessionEntity: sessionEntity, firstSessionSTime: firstSessionStartTime)
+                    return RealmToModelMapper.toModel(sessionEntity: sessionEntity, firstSessionSTime: firstSessionStartTime ?? firstSessionDefaultStartTime)
                 }
             }
         } catch {
